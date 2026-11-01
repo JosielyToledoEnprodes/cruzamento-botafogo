@@ -5749,7 +5749,7 @@ const chao = (x, z) => { const r = Math.hypot(x, z); return -.4 + ((noFino(x, z)
   const m = new G.Mesh(g, mt); m.receiveShadow = true; scene.add(m);
   // malha fina por cima, com satelite proprio
   const gf = new G.PlaneGeometry(LF, AF, RF.w - 1, RF.h - 1); gf.rotateX(-PI / 2); gf.translate(CXF, 0, CZF);
-  const pf = gf.attributes.position; for (let i = 0; i < pf.count; i++) pf.setY(i, chao(pf.getX(i), pf.getZ(i)) + .5);
+  const pf = gf.attributes.position; for (let i = 0; i < pf.count; i++) { const x = pf.getX(i), z = pf.getZ(i); pf.setY(i, chao(x, z) + (Math.hypot(x, z) < 340 ? -.8 : .5)); }
   gf.computeVertexNormals();
   const uf = gf.attributes.uv; for (let i = 0; i < uf.count; i++) uf.setXY(i, (pf.getX(i) - CXR + LARG / 2) / LARG, 1 - (pf.getZ(i) - CZR + ALTU / 2) / ALTU);
   const mf = mt;
@@ -5872,9 +5872,9 @@ let predioBranco = null, torreRS = null, mallRS = null;
   let md = 1e9; PRED_PERTO.forEach(p => { const d = Math.hypot(p.cx - bx, p.cz - bz); if (d < md && !p.h) { md = d; predioBranco = p; } });
 }
 for (const p of PRED) {
-  let pts = p.p.map(([x, z]) => new G.Vector2(x, z)); if (pts.length < 3) continue;
+  const rec = .04 + rnd(.16); let pts = p.p.map(([x, z]) => { const dx = x - p.cx, dz = z - p.cz, d = Math.hypot(dx, dz) || 1, k = Math.max(0, 1 - rec / d); return new G.Vector2(p.cx + dx * k, p.cz + dz * k); }); if (pts.length < 3) continue;
   if (G.ShapeUtils.isClockWise(pts)) pts = pts.reverse();
-  const d = Math.hypot(p.cx, p.cz); let h = p.h || (d < 300 ? 18 + rnd(16) : 16);
+  const d = Math.hypot(p.cx, p.cz); let h = (p.h || (d < 300 ? 18 + rnd(16) : 16)) + rnd(.15, .6);
   let tipo = 'g' + Math.floor(rnd(FACH.length));
   if (/Torre RioSul/i.test(p.n)) { tipo = 'torre'; torreRS = p; }
   else if (/^RioSul$/i.test(p.n)) { tipo = 'vidro'; mallRS = p; }
