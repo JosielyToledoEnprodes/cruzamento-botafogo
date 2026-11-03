@@ -124,7 +124,7 @@ button.acao.modo[aria-pressed="true"] { background: var(--verde); border-color: 
     <button class="aba" id="abaTudo">Ocultar tudo</button>
   </div>
   <nav id="catalogo" class="caixa" aria-label="Elementos do cruzamento">
-    <header><h1>Semáforo com IA</h1><p>Câmera, semáforo e cabos de energia e de dados. Toque em um ponto ou na lista.</p></header>
+    <header><h1>Semáforo com IA</h1><p>Câmera, semáforo, energia e rede sem fio. Toque em um ponto ou na lista.</p></header>
     <fieldset id="filtros"><legend>Legendas</legend><div id="cats"></div><div id="tudo"><button class="mini" id="marcaTudo">Marcar tudo</button><button class="mini" id="limpa">Limpar</button></div></fieldset>
     <ul id="lista"></ul>
   </nav>
@@ -6016,7 +6016,7 @@ const mTampa = new G.MeshStandardMaterial({ map: telaTex(128, 128, (x, w) => { x
 const tampas = [];
 for (const [s, o] of [[sOG - 3, 1], [sOG - 16, -1], [sOG - 40, 0], [sOG - 70, .4]]) { const p = em(RG, s), off = o * (AP.G.w / 2 + 2.2), x = p.x - p.tz * off, z = p.z + p.tx * off; const t = caixa(o ? 1.1 : .9, .02, o ? .7 : .9, mTampa, x, o ? .01 : .04, z, scene, false); t.rotation.y = Math.atan2(p.tx, p.tz); tampas.push(t); marca(t, 'bueiro'); }
 
-/* ================= conexoes: controlador, energia (amarelo) e dados (azul) ================= */
+/* ================= conexoes: controlador, energia (amarelo) e rede sem fio (azul) ================= */
 const UP = (v, y, dx = 0, dz = 0) => new G.Vector3(v.x + dx, y, v.z + dz), YC = .12;
 const pG0 = em(AP.G.tr, AP.G.sPare);
 const [ctx, ctz] = pertoLivre(SINAIS.G.base.x - pG0.tx * 3, SINAIS.G.base.z - pG0.tz * 3, .7);
@@ -6030,8 +6030,8 @@ const [cpx, cpz] = pertoLivre(ctx - pG0.tx * 1.8, ctz - pG0.tz * 1.8, .4);
 const CAIXA_P = new G.Vector3(cpx, 0, cpz);
 marca(caixa(.8, .04, .6, mTampa, cpx, .03, cpz, scene, false), 'energia');
 const CENTRAL = new G.Vector3(ctx - pG0.tx * 45, 0, ctz - pG0.tz * 45);
-const gEnergia = new G.Group(), gAerea = new G.Group(), gSub = new G.Group(), gFibra = new G.Group(), gIA = new G.Group();
-scene.add(gEnergia, gAerea, gSub, gFibra, gIA);
+const gEnergia = new G.Group(), gAerea = new G.Group(), gSub = new G.Group(), gSemFio = new G.Group(), gIA = new G.Group();
+scene.add(gEnergia, gAerea, gSub, gSemFio, gIA);
 const PULSOS = [];
 function cabo(pts, cor, raio, pai, id) {
   const cp = new G.CurvePath(); for (let i = 0; i < pts.length - 1; i++) cp.add(new G.LineCurve3(pts[i], pts[i + 1]));
@@ -6042,7 +6042,18 @@ function cabo(pts, cor, raio, pai, id) {
   for (let i = 0; i < n; i++) { const b = new G.Mesh(bg, bm); pai.add(b); bolas.push(b); }
   PULSOS.push({ cp, bolas, pai, f: rnd(), vel: 3.5 / cp.getLength() });
 }
-{ const ENE = 0xffb21a, FIB = 0x3fd0ff, SG = SINAIS.G, SL = SINAIS.L;
+// enlace sem fio: arco fino e transparente pelo ar, com pulsos, sem aparencia de cabo
+const ANT_T = 2.8, ANT_C = 7;
+function enlace(a, b, altura, cor) {
+  const m = a.clone().lerp(b, .5); m.y = Math.max(a.y, b.y) + altura;
+  const cp = new G.CurvePath(); cp.add(new G.QuadraticBezierCurve3(a, m, b));
+  const tubo = new G.Mesh(new G.TubeGeometry(cp, 40, .05, 6, false), new G.MeshBasicMaterial({ color: cor, toneMapped: false, transparent: true, opacity: .28, depthWrite: false }));
+  marca(gSemFio.add(tubo).children.slice(-1)[0], 'semFio');
+  const bm = new G.MeshBasicMaterial({ color: new G.Color(cor).lerp(new G.Color(0xffffff), .6), toneMapped: false }), bg = new G.SphereGeometry(.14, 8, 6);
+  const bolas = []; for (let i = 0, n = Math.max(3, Math.round(cp.getLength() / 4)); i < n; i++) { const c = new G.Mesh(bg, bm); gSemFio.add(c); bolas.push(c); }
+  PULSOS.push({ cp, bolas, pai: gSemFio, f: rnd(), vel: 9 / cp.getLength() });
+}
+{ const ENE = 0xffb21a, RF = 0x3fd0ff, SG = SINAIS.G, SL = SINAIS.L;
   // energia: caixa de passagem -> controlador -> cada poste, subindo ate os grupos focais
   cabo([UP(CAIXA_P, YC), UP(CTRL, YC)], ENE, .1, gEnergia, 'energia');
   for (const [b, h] of [[SG.base, 6.3], [SG.rep, 4.1], [SL.base, 6.3], [SL.rep, 4.1]]) cabo([UP(CTRL, YC), UP(b, YC, .18), UP(b, h, .18)], ENE, .08, gEnergia, 'energia');
@@ -6050,9 +6061,11 @@ function cabo(pts, cor, raio, pai, id) {
   if (FIO_PTS.length) { const a = FIO_PTS.reduce((m, p) => p.distanceTo(CTRL) < m.distanceTo(CTRL) ? p : m), t = UP(CTRL, 1.6), meio = a.clone().lerp(t, .5); meio.y = Math.min(a.y, t.y) + 1.2;
     cabo([a, meio, t], ENE, .07, gAerea, 'fiacao'); }
   cabo([UP(CAIXA_P, YC, -pG0.tx * 40, -pG0.tz * 40), UP(CAIXA_P, YC)], ENE, .1, gSub, 'energia');
-  // dados: cada camera desce pelo poste ate o controlador, e dali segue para a central
-  for (const S of [SG, SL]) cabo([S.cam, UP(S.base, S.cam.y, -.18), UP(S.base, YC, -.18), UP(CTRL, YC, -.18)], FIB, .07, gFibra, 'fibra');
-  cabo([UP(CTRL, YC, -.18), UP(CENTRAL, YC)], FIB, .09, gFibra, 'fibra');
+  // dados: rede sem fio de cada camera ate a antena do controlador, e dali ate a central
+  const mAnt = std(0x24282c, .5), antena = (x, h, z) => marca(caixa(.07, h, .07, mAnt, x, h / 2, z, gSemFio), 'semFio');
+  antena(ctx, ANT_T, ctz); antena(CENTRAL.x, ANT_C, CENTRAL.z);
+  for (const S of [SG, SL]) enlace(S.cam, UP(CTRL, ANT_T), 1.2, RF);
+  enlace(UP(CTRL, ANT_T), UP(CENTRAL, ANT_C), 6, RF);
   // area que cada camera ve: piramide transparente ate a fila e o chao destacado
   const mCone = new G.MeshBasicMaterial({ color: 0x35d07f, toneMapped: false, transparent: true, opacity: .16, side: G.DoubleSide, depthWrite: false });
   const mChao = new G.MeshBasicMaterial({ color: 0x35d07f, toneMapped: false, transparent: true, opacity: .3, side: G.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
@@ -6271,7 +6284,7 @@ const ELEMENTOS = [
   { id: 'camComum', cat: 'ia', ia: false, t: 'Câmera comum (hoje)', p: () => new G.Vector3(cmx, 6.7, cmz), v: [9, -2], acao: ['Ver com IA', true],
     d: 'Câmera de monitoramento que só grava imagens para a central. Ela não conversa com o semáforo: o sinal abre e fecha no mesmo tempo, com fila ou sem fila.', r: '' },
   { id: 'cameraIA', cat: 'ia', ia: true, t: 'Câmeras com IA', p: () => SINAIS.G.cam, v: [8, 1.5], acao: ['Ver sem IA', false],
-    d: 'Uma câmera no alto de cada semáforo, virada para os carros que chegam. A IA conta os veículos dentro da área verde (cada carro contado ganha uma caixa verde) e manda o número ao controlador várias vezes por segundo.', r: 'Exemplo: 6 carros na Góis Monteiro e 4 na pista local → o verde vai para a Góis Monteiro.' },
+    d: 'Uma câmera no alto de cada semáforo, virada para os carros que chegam. A IA conta os veículos dentro da área verde (cada carro contado ganha uma caixa verde) e manda o número ao controlador pela rede sem fio, várias vezes por segundo.', r: 'Exemplo: 6 carros na Góis Monteiro e 4 na pista local → o verde vai para a Góis Monteiro.' },
   { id: 'decisao', cat: 'ia', ia: true, t: 'Como a IA decide', p: () => at(RG, AP.G.sPare - 22, 0, 2), v: [18, 8],
     d: 'O verde continua enquanto ainda chegam carros. Troca quando a via esvazia e a outra tem fila, quando a outra fila fica bem maior ou depois de 25 segundos. Nunca corta a travessia de um pedestre no meio.', r: 'Compare a espera média no painel de baixo, com e sem IA.' },
   { id: 'controlador', cat: 'rede', t: 'Controlador semafórico', p: () => CTRL.clone().setY(1.6), v: [6, 2],
@@ -6280,13 +6293,13 @@ const ELEMENTOS = [
     d: 'Em amarelo, a energia chega à caixa de passagem na calçada, entra no controlador e segue por dutos sob a calçada até cada poste, subindo por dentro dele até as luzes.', r: 'Sem IA, a energia ainda desce da fiação aérea. Com IA, a entrada também passa pelo subsolo.' },
   { id: 'fiacao', cat: 'rede', ia: false, t: 'Fiação aérea (hoje)', p: () => FIO_PTS.length ? FIO_PTS[FIO_PTS.length - 1].clone() : CTRL.clone().setY(8), v: [12, -3],
     d: 'Postes de concreto com cabos de energia, telefone e internet pendurados. Um ramal desce até o controlador do semáforo.', r: '' },
-  { id: 'fibra', cat: 'rede', ia: true, t: 'Cabo de dados (fibra óptica)', p: () => SINAIS.L.cam, v: [8, 1],
-    d: 'Em azul, a fibra que leva a imagem e a contagem de cada câmera até o controlador e, dali, até a central de operações. A informação chega em milésimos de segundo.', r: '' },
-  { id: 'central', cat: 'rede', ia: true, t: 'Para a central de operações', p: () => CENTRAL.clone().setY(1), v: [14, 6],
-    d: 'O controlador manda os dados para a central da cidade, que acompanha todos os cruzamentos, recebe alertas de acidente ou de semáforo com defeito e pode ajustar os tempos a distância.', r: '' }
+  { id: 'semFio', cat: 'rede', ia: true, t: 'Rede sem fio na borda', p: () => SINAIS.L.cam, v: [8, 1],
+    d: 'Em azul, o enlace sem fio entre cada câmera e o controlador, sem cabo de dados. A IA opera na borda: a imagem é analisada ali no poste e a contagem segue pela rede até o controlador.', r: '' },
+  { id: 'central', cat: 'rede', ia: true, t: 'Para a central de operações', p: () => CENTRAL.clone().setY(ANT_C), v: [14, 6],
+    d: 'Pela rede sem fio, o controlador manda os dados para a central da cidade, que acompanha todos os cruzamentos, recebe alertas de acidente ou de semáforo com defeito e pode ajustar os tempos a distância.', r: '' }
 ];
 // aliases de clique em objetos
-const ALIAS = { semG: 'semG', semL: 'semL', faixa: 'faixa', camComum: 'camComum', cameraIA: 'cameraIA', controlador: 'controlador', energia: 'energia', fibra: 'fibra', fiacao: 'fiacao' };
+const ALIAS = { semG: 'semG', semL: 'semL', faixa: 'faixa', camComum: 'camComum', cameraIA: 'cameraIA', controlador: 'controlador', energia: 'energia', semFio: 'semFio', fiacao: 'fiacao' };
 
 /* ================= interface ================= */
 const porId = {};
@@ -6316,7 +6329,7 @@ let voo = null, atual = null;
 function voa(c, a) { if (movido) { camera.position.copy(c); controls.target.copy(a); return; } voo = { t: 0, c0: camera.position.clone(), a0: controls.target.clone(), c1: c, a1: a }; }
 function fichaInicial() {
   $('ficha').style.removeProperty('--cor');
-  $('ficha').innerHTML = `<div class="cat">Botafogo · Rio de Janeiro</div><h2>Semáforo com e sem IA</h2><p>A esquina da Rua General Góis Monteiro com a Av. Lauro Sodré, com foco no que faz o semáforo funcionar: câmera, controlador e os cabos de energia e de dados.</p><p class="regra"><b>Sem IA</b>, o sinal abre e fecha em tempo fixo. <b>Com IA</b>, câmeras contam os carros e o verde vai para a via com mais fila. Troque o modo no painel de baixo e compare a espera média.</p><p class="fonte">Ruas e prédios: © colaboradores do OpenStreetMap (ODbL). Relevo: Terrain Tiles (Mapzen/AWS). Satélite: Sentinel-2 cloudless por EOX (CC BY 4.0). Pessoas: MakeHuman (CC0). Árvore e texturas: Poly Haven (CC0). Câmeras, cabos e controlador são representações ilustrativas.</p><div id="passos"><button class="acao" id="btInicio">Começar pelo primeiro</button><button class="acao" id="btIA">${modoIA ? 'Desligar a IA' : 'Ligar a IA'}</button></div>`;
+  $('ficha').innerHTML = `<div class="cat">Botafogo · Rio de Janeiro</div><h2>Semáforo com e sem IA</h2><p>A esquina da Rua General Góis Monteiro com a Av. Lauro Sodré, com foco no que faz o semáforo funcionar: câmera, controlador, cabos de energia e rede sem fio.</p><p class="regra"><b>Sem IA</b>, o sinal abre e fecha em tempo fixo. <b>Com IA</b>, câmeras contam os carros e o verde vai para a via com mais fila. Troque o modo no painel de baixo e compare a espera média.</p><p class="fonte">Ruas e prédios: © colaboradores do OpenStreetMap (ODbL). Relevo: Terrain Tiles (Mapzen/AWS). Satélite: Sentinel-2 cloudless por EOX (CC BY 4.0). Pessoas: MakeHuman (CC0). Árvore e texturas: Poly Haven (CC0). Câmeras, cabos, rede sem fio e controlador são representações ilustrativas.</p><div id="passos"><button class="acao" id="btInicio">Começar pelo primeiro</button><button class="acao" id="btIA">${modoIA ? 'Desligar a IA' : 'Ligar a IA'}</button></div>`;
   $('btIA').onclick = () => { defineModo(!modoIA); fichaInicial(); };
   $('btInicio').onclick = () => seleciona(ELEMENTOS[0].id);
 }
@@ -6337,7 +6350,7 @@ function seleciona(id) {
 }
 function defineModo(v) {
   modoIA = v; $('mSem').setAttribute('aria-pressed', !v); $('mCom').setAttribute('aria-pressed', v);
-  gIA.visible = gFibra.visible = gSub.visible = v; gAerea.visible = gFios.visible = gCamComum.visible = !v; camsIA.forEach(c => { c.visible = v; });
+  gIA.visible = gSemFio.visible = gSub.visible = v; gAerea.visible = gFios.visible = gCamComum.visible = !v; camsIA.forEach(c => { c.visible = v; });
   $('barra').hidden = v; $('contagem').classList.toggle('ia', v); ultimaFase = null; ultimaCont = '';
   if (v) { const f = fase(relogio); Object.assign(ctl, { verde: f.L === 'G' ? 'L' : 'G', etapa: 'V', t: 0, pedAte: 0, motivo: '' }); }
 }
