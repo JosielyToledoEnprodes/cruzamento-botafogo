@@ -25,7 +25,7 @@ body { background: var(--asfalto); color: var(--texto); font-family: var(--corpo
 #abas { position: absolute; z-index: 5; left: 50%; top: 10px; transform: translateX(-50%); display: flex; gap: 4px; max-width: calc(100% - 16px); overflow-x: auto; padding: 4px; background: var(--painel); border: 1px solid var(--linha); border-radius: 6px; scrollbar-width: none; }
 .aba { flex: none; font: 600 13px var(--corpo); color: var(--apoio); background: none; border: 0; border-radius: 4px; padding: 4px 9px; cursor: pointer; }
 .aba[aria-pressed="true"] { background: var(--texto); color: #111; }
-#catalogo { left: max(12px, env(safe-area-inset-left, 0px)); top: 54px; bottom: 96px; width: 262px; display: flex; flex-direction: column; min-height: 0; }
+#catalogo { left: max(12px, env(safe-area-inset-left, 0px)); top: 54px; bottom: auto; max-height: calc(100% - 150px); width: 262px; display: flex; flex-direction: column; min-height: 0; }
 #catalogo header { padding: 12px 14px 6px; }
 h1 { margin: 0; font: 700 24px/1.05 var(--display); text-wrap: balance; }
 #catalogo header p { margin: 4px 0 0; color: var(--apoio); font-size: 13px; }
@@ -124,7 +124,7 @@ button.acao.modo[aria-pressed="true"] { background: var(--verde); border-color: 
     <button class="aba" id="abaTudo">Ocultar tudo</button>
   </div>
   <nav id="catalogo" class="caixa" aria-label="Elementos do cruzamento">
-    <header><h1>Semáforo com IA</h1><p>Câmera, semáforo, energia e rede sem fio. Toque em um ponto ou na lista.</p></header>
+    <header><h1>Semáforo com IA</h1><p>Câmera, semáforo e rede sem fio. Toque em um ponto ou na lista.</p></header>
     <fieldset id="filtros"><legend>Legendas</legend><div id="cats"></div><div id="tudo"><button class="mini" id="marcaTudo">Marcar tudo</button><button class="mini" id="limpa">Limpar</button></div></fieldset>
     <ul id="lista"></ul>
   </nav>
@@ -132,8 +132,8 @@ button.acao.modo[aria-pressed="true"] { background: var(--verde); border-color: 
   <section id="ciclo" class="caixa" aria-label="Semáforo">
     <div id="faseTxt"><b></b><span></span></div>
     <div class="ctl" role="group" aria-label="Modo do semáforo">
-      <button class="acao modo" id="mSem" aria-pressed="true">Sem IA (tempo fixo)</button>
-      <button class="acao modo" id="mCom" aria-pressed="false">Com IA (câmeras)</button>
+      <button class="acao modo" id="mSem" aria-pressed="true">Controle convencional</button>
+      <button class="acao modo" id="mCom" aria-pressed="false">Cidade inteligente</button>
     </div>
     <div class="ctl">
       <button class="acao" id="btNoite">Ver à noite</button>
@@ -5814,7 +5814,9 @@ const mCiclo = new G.MeshStandardMaterial({ color: 0x9c3a2e, roughness: .85, pol
 scene.children.slice(-8).forEach(m => { if (m.material === mAsf) marca(m, 'pista'); });
 
 /* ================= rotas reais e o cruzamento ================= */
-function rota(ids) { const P = []; ids.forEach(id => { const r = porWay[id]; if (!r) return; r.P.forEach((p, i) => { if (!P.length || P[P.length - 1].distanceTo(p) > .8) P.push(p.clone()); }); }); return trilha(P); }
+function rota(ids) { const P = [], W = []; ids.forEach(id => { const r = porWay[id]; if (!r) return; r.P.forEach((p, i) => { if (!P.length || P[P.length - 1].distanceTo(p) > .8) { P.push(p.clone()); W.push(r.w); } }); }); return Object.assign(trilha(P), { W }); }
+// largura real da rua no ponto s da rota (interpolada entre os pontos, para a troca de largura entre trechos ser suave)
+function largEm(tr, s, padrao) { if (!tr.W) return padrao; s = Math.max(0, Math.min(tr.tot - .001, s)); let i = 1; while (i < tr.L.length - 1 && tr.L[i] < s) i++; const k = (s - tr.L[i - 1]) / ((tr.L[i] - tr.L[i - 1]) || 1); return tr.W[i - 1] + (tr.W[i] - tr.W[i - 1]) * k; }
 const RG = rota(['37319463', '30989359', '374883654', '30989367']);      // Rua da Passagem -> Gen. Gois Monteiro -> Lauro Sodre (sentido Tunel Novo)
 const RL = rota(['31020702', '784100266', '74519041', '74519042']);      // pista local da Lauro Sodre -> Av. Carlos Peixoto
 const RTS = rota(['569527789', '42161787', '30989367', '14800589']);     // Lauro Sodre principal, sentido Copacabana
@@ -5836,7 +5838,8 @@ const faixas = { pos: [], uv: [], idx: [] };
 for (const k of ['G', 'L']) { const a = AP[k], z = zebra(a.tr, a.sFaixa, a.w + .4), b = faixas.pos.length / 3; faixas.pos.push(...z.pos); faixas.uv.push(...z.uv); faixas.idx.push(...z.idx.map(i => i + b));
   const p = em(a.tr, a.sPare); const r = fita([new G.Vector2(p.x - p.tx * .2, p.z - p.tz * .2), new G.Vector2(p.x + p.tx * .2, p.z + p.tz * .2)], -a.w / 2, a.w / 2, .035, 4); const b2 = faixas.pos.length / 3; faixas.pos.push(...r.pos); faixas.uv.push(...r.uv); faixas.idx.push(...r.idx.map(i => i + b2)); }
 // faixas reais do mapa perto do cruzamento (outras travessias)
-D.pois.filter(p => p.k === 'crossing' && Math.hypot(p.x, p.z) < 140 && Math.hypot(p.x, p.z) > 14).forEach(p => {
+const ZEBRAS_SEM = ['G', 'L'].map(k => em(AP[k].tr, AP[k].sFaixa));
+D.pois.filter(p => p.k === 'crossing' && Math.hypot(p.x, p.z) < 140 && Math.hypot(p.x, p.z) > 14 && !ZEBRAS_SEM.some(q => Math.hypot(p.x - q.x, p.z - q.z) < 15)).forEach(p => {
   let melhor = null, md = 1e9; for (const r of RUAS) for (let i = 0; i < r.P.length - 1; i++) { const d = distSeg(p.x, p.z, r.P[i], r.P[i + 1]); if (d < md) { md = d; melhor = r; } }
   if (!melhor || md > 3) return; const tr = trilha(melhor.P), z = zebra(tr, sMaisPerto(tr, p.x, p.z), melhor.w + .4), b = faixas.pos.length / 3; faixas.pos.push(...z.pos); faixas.uv.push(...z.uv); faixas.idx.push(...z.idx.map(i => i + b));
 });
@@ -5918,13 +5921,24 @@ const arvInst = [];
 async function carregaArvores() {
   const gl = new G.GLTFLoader(), g = await new Promise((ok, no) => gl.parse(b64buf(ATIVOS.arvore), '', ok, no));
   g.scene.updateMatrixWorld(true); const bb = new G.Box3().setFromObject(g.scene);
-  const mat = new G.Matrix4(), dum = new G.Object3D();
+  const mat = new G.Matrix4(), dum = new G.Object3D(), cor = new G.Color();
+  // cada arvore com tamanho, giro, leve inclinacao e tom de verde proprios; a copa ganha uma segunda camada de folhas para ficar cheia
   for (const [lista, nome] of [[LUG_ARV, 'hoje']]) {
+    const var_ = lista.map(([x, z, y, h]) => ({ x, z, y, h: h * rnd(.9, 1.12), rot: rnd(6.28), larg: rnd(1.25, 1.55), incl: [rnd(-.05, .05), rnd(-.05, .05)], tom: [rnd(-.025, .025), rnd(-.06, .08), rnd(-.12, .06)] }));
+    const poe = (inst, extraRot = 0, extraEsc = 1, extraY = 0) => var_.forEach((v, i) => { const e = v.h / (bb.max.y - bb.min.y);
+      dum.position.set(v.x, v.y - bb.min.y * e + extraY * v.h, v.z); dum.rotation.set(v.incl[0], v.rot + extraRot, v.incl[1]); dum.scale.set(e * v.larg * extraEsc, e * extraEsc, e * v.larg * extraEsc); dum.updateMatrix();
+      inst.setMatrixAt(i, mat.multiplyMatrices(dum.matrix, inst.userData.base)); });
     g.scene.traverse(m => {
-      if (!m.isMesh) return; m.material.side = G.DoubleSide; m.material.metalness = 0; m.material.metalnessMap = null; m.material.envMapIntensity = .45; m.material.transparent = false; m.material.alphaTest = .5; m.material.depthWrite = true; m.material.needsUpdate = true;
-      const inst = new G.InstancedMesh(m.geometry, m.material, lista.length);
-      lista.forEach(([x, z, y, h], i) => { const e = h / (bb.max.y - bb.min.y); dum.position.set(x, y - bb.min.y * e, z); dum.rotation.y = rnd(6.28); dum.scale.set(e * 1.25, e, e * 1.25); dum.updateMatrix(); inst.setMatrixAt(i, mat.multiplyMatrices(dum.matrix, m.matrixWorld)); });
-      inst.castShadow = true; inst.receiveShadow = true; scene.add(inst); arvInst.push([nome, inst]); marca(inst, 'arvores');
+      if (!m.isMesh) return; const folha = /leaves/.test(m.material.name);
+      m.material.side = G.DoubleSide; m.material.metalness = 0; m.material.metalnessMap = null; m.material.envMapIntensity = folha ? .35 : .45; m.material.transparent = false; m.material.alphaTest = .5; m.material.depthWrite = true;
+      if (folha) { m.material.roughness = .85; }
+      m.material.needsUpdate = true;
+      const camadas = folha ? [[0, 1, 0], [1.7, .9, .06]] : [[0, 1, 0]];
+      for (const [r, esc, dy] of camadas) {
+        const inst = new G.InstancedMesh(m.geometry, m.material, lista.length); inst.userData.base = m.matrixWorld; poe(inst, r, esc, dy);
+        if (folha) var_.forEach((v, i) => { cor.setHSL(.24 + v.tom[0], .3 + v.tom[1], .82 + v.tom[2] - r * .06); inst.setColorAt(i, cor); });
+        inst.castShadow = true; inst.receiveShadow = true; scene.add(inst); arvInst.push([nome, inst]); marca(inst, 'arvores');
+      }
     });
   }
 }
@@ -5944,7 +5958,21 @@ function grupoFocal(k, pai, x, y, z) {
   return g;
 }
 function grupoPed(k, pai, x, y, z) { const g = new G.Group(); g.position.set(x, y, z); pai.add(g); caixa(.3, .62, .22, mPreto, 0, 0, 0, g); const s = new G.Mesh(new G.PlaneGeometry(.24, .24), ped[k].S); s.position.set(0, .15, .112); g.add(s); const w = new G.Mesh(new G.PlaneGeometry(.24, .24), ped[k].W); w.position.set(0, -.15, .112); g.add(w); return g; }
-const SINAIS = {}, camsIA = [];
+const SINAIS = {}, camsIA = [], placasIA = [];
+const texPlacaIA = telaTex(256, 320, (x, w, h) => {
+  x.fillStyle = '#f4f5f2'; x.fillRect(0, 0, w, h); x.strokeStyle = '#3a3d40'; x.lineWidth = 10; x.strokeRect(5, 5, w - 10, h - 10);
+  x.fillStyle = '#2f9a3e';
+  const seta = (cx, cima) => { const s = cima ? -1 : 1, y0 = 120 - s * 60; x.fillRect(cx - 9, Math.min(y0, y0 + s * 80), 18, 80); x.beginPath(); x.moveTo(cx - 30, 120 + s * 10); x.lineTo(cx + 30, 120 + s * 10); x.lineTo(cx, 120 + s * 50); x.closePath(); x.fill(); };
+  seta(96, false); seta(160, true);
+  x.fillStyle = '#26292c'; x.textAlign = 'center'; x.font = '700 30px Barlow, Arial'; x.fillText('SEMÁFORO', w / 2, 212); x.fillText('INTELIGENTE', w / 2, 246);
+  x.font = '600 11px Barlow, Arial'; x.fillText('PREFEITURA', w / 2 - 14, 276); x.font = '800 26px Barlow, Arial'; x.fillText('RIO', w / 2 + 34, 290);
+});
+function placaIA(pai, x, y, z) {
+  const g = new G.Group(); g.position.set(x, y, z); pai.add(g);
+  caixa(.96, 1.2, .05, std(0x6b7075, .5, .3), 0, 0, -.03, g);                                            // chapa
+  const f = new G.Mesh(new G.PlaneGeometry(.92, 1.15), new G.MeshStandardMaterial({ map: texPlacaIA, roughness: .5 })); f.position.z = .001; g.add(f);
+  placasIA.push(g); return g;
+}
 const mCamBr = std(0xe9ebec, .4), mLente = new G.MeshStandardMaterial({ color: 0x0a0d12, roughness: .05, metalness: .6, emissive: 0x18f07a, emissiveIntensity: .5 });
 function semaforo(k) {
   const a = AP[k], p = em(a.tr, a.sPare), dir = Math.atan2(-p.tx, -p.tz);                       // grupos olham para quem chega
@@ -5957,17 +5985,20 @@ function semaforo(k) {
   grupoFocal(k, g, -brac * .8, 5.6, 0); grupoFocal(k, g, 0, 3.6, .22);
   grupoPed(k === 'G' ? 'L' : 'G', g, -.25, 2.7, 0).rotation.y = -PI / 2;
   caixa(.15, .4, .24, std(0xe0ac0d, .4), 0, 1.3, .2, g);                                          // botoeira
+  placaIA(g, -brac * .45, 6.95, .09);   // presa na frente do braco, sem haste
   marca(g, k === 'G' ? 'semG' : 'semL');
-  // camera com IA no alto do poste, virada para a fila de carros que chega
-  const cam = new G.Group(); cam.position.set(.34, 6.8, 0); cam.rotation.x = .28; g.add(cam);
-  caixa(.3, .06, .06, mPoste, -.18, 0, 0, cam); caixa(.22, .22, .6, mCamBr, 0, 0, .1, cam); caixa(.28, .04, .74, mPreto, 0, .13, .14, cam);
-  const lente = cil(.085, .06, mLente, 0, 0, .42, cam, 16); lente.rotation.x = PI / 2;
+  // camera com IA no braco do semaforo, virada para a fila de carros que chega
+  const xPl = -brac * .45, xCam = xPl - .72 > -brac * .8 + .55 ? xPl - .72 : xPl + .72;   // ao lado da placa, sem encostar no grupo focal (braco curto: lado do poste)
+  const cam = new G.Group(); cam.position.set(xCam, 6.08, 0); cam.rotation.x = .28; g.add(cam);   // pendurada no braco, ao lado da placa
+  // modelo: caixa clara com teto que avanca, frente preta e luz vermelha no canto de cima
+  caixa(.08, .2, .08, mPoste, 0, .27, 0, cam); caixa(.2, .05, .16, mPoste, 0, .37, 0, cam);                          // suporte ate o braco
+  caixa(.34, .26, .6, mCamBr, 0, 0, .08, cam); caixa(.4, .035, .74, mCamBr, 0, .15, .13, cam);                          // corpo e teto
+  caixa(.3, .22, .02, mPreto, 0, -.005, .39, cam);                                                                       // frente preta
+  const luz = new G.Mesh(new G.SphereGeometry(.045, 12, 8), new G.MeshBasicMaterial({ color: 0xff3020, toneMapped: false })); luz.position.set(-.09, .06, .405); cam.add(luz);
+  const lente = cil(.05, .02, mLente, .06, -.03, .405, cam, 16); lente.rotation.x = PI / 2;
   marca(cam, 'cameraIA'); camsIA.push(cam);
-  // repetidor do outro lado da faixa
-  const q = em(a.tr, a.sFaixa + 6), [rx, rz] = pertoLivre(q.x - q.tz * (a.w / 2 + .8), q.z + q.tx * (a.w / 2 + .8), .45), g2 = grupo(rx, rz, 0); g2.rotation.y = dir;
-  cil(.09, 4.2, mPoste, 0, 2.1, 0, g2, 10); grupoFocal(k, g2, 0, 3.7, .22); grupoPed(k === 'G' ? 'L' : 'G', g2, 0, 2.6, -.2).rotation.y = PI; marca(g2, k === 'G' ? 'semG' : 'semL');
   g.updateMatrixWorld(true);
-  SINAIS[k] = { pos: new G.Vector3(bx, 5.5, bz), ped: new G.Vector3(bx, 2.7, bz), base: new G.Vector3(bx, 0, bz), rep: new G.Vector3(rx, 0, rz), cam: cam.localToWorld(new G.Vector3(0, 0, .45)) };
+  SINAIS[k] = { pos: new G.Vector3(bx, 5.5, bz), ped: new G.Vector3(bx, 2.7, bz), base: new G.Vector3(bx, 0, bz), cam: cam.localToWorld(new G.Vector3(0, 0, .45)) };
 }
 semaforo('G'); semaforo('L');
 
@@ -6016,34 +6047,27 @@ const mTampa = new G.MeshStandardMaterial({ map: telaTex(128, 128, (x, w) => { x
 const tampas = [];
 for (const [s, o] of [[sOG - 3, 1], [sOG - 16, -1], [sOG - 40, 0], [sOG - 70, .4]]) { const p = em(RG, s), off = o * (AP.G.w / 2 + 2.2), x = p.x - p.tz * off, z = p.z + p.tx * off; const t = caixa(o ? 1.1 : .9, .02, o ? .7 : .9, mTampa, x, o ? .01 : .04, z, scene, false); t.rotation.y = Math.atan2(p.tx, p.tz); tampas.push(t); marca(t, 'bueiro'); }
 
-/* ================= conexoes: controlador, energia (amarelo) e rede sem fio (azul) ================= */
+/* ================= conexoes: controlador e rede sem fio (azul) ================= */
 const UP = (v, y, dx = 0, dz = 0) => new G.Vector3(v.x + dx, y, v.z + dz), YC = .12;
 const pG0 = em(AP.G.tr, AP.G.sPare);
-const [ctx, ctz] = pertoLivre(SINAIS.G.base.x - pG0.tx * 3, SINAIS.G.base.z - pG0.tz * 3, .7);
+const [ctx, ctz] = (() => { const p = em(AP.G.tr, AP.G.sPare - 3), o = AP.G.w / 2 + 4.6; return pertoLivre(p.x - p.tz * o, p.z + p.tx * o, .7); })();   // fundo da calcada, encostado no gramado
 const CTRL = new G.Vector3(ctx, 0, ctz);
-{ const g = grupo(ctx, ctz, Math.atan2(pG0.tx, pG0.tz)), mArm = std(0x9ea4a8, .5, .3);
-  caixa(.9, 1.5, .5, mArm, 0, .75, 0, g); caixa(1, .08, .6, std(0x6b7075, .5), 0, 1.54, 0, g); caixa(.02, 1.3, .52, std(0x5b6064, .6), 0, .75, 0, g);
-  caixa(.22, .2, .52, new G.MeshStandardMaterial({ color: 0xf2c400, emissive: 0x332200 }), -.24, 1.12, 0, g);
-  for (let i = 0; i < 3; i++) caixa(.3, .02, .52, std(0x6b7075, .6), .22, .3 + i * .08, 0, g);
+const CTRL_Y = 4.3;   // armario preso no alto do poste, fora do chao
+{ const g = grupo(ctx, ctz, Math.atan2(pG0.tx, pG0.tz)), mArm = std(0x9ea4a8, .5, .3), Y = CTRL_Y;
+  cil(.09, 6, mPoste, 0, 3, -.36, g, 12); cil(.16, .25, mPoste, 0, .125, -.36, g, 12);                              // poste
+  for (const h of [Y + .25, Y + 1.25]) caixa(.12, .1, .14, mPoste, 0, h, -.29, g);                                       // abracadeiras
+  { const ch = new G.Mesh(new G.ConeGeometry(.5, .32, 24, 1, true), new G.MeshStandardMaterial({ color: 0x8c9296, roughness: .45, metalness: .5, side: G.DoubleSide })); ch.position.set(0, Y - .3, -.36); ch.castShadow = true; g.add(ch);   // chapeu chines: cone no poste antes da caixa
+    cil(.11, .06, mPoste, 0, Y - .14, -.36, g, 12); }
+  caixa(.9, 1.5, .5, mArm, 0, Y + .75, 0, g); caixa(1, .08, .6, std(0x6b7075, .5), 0, Y + 1.54, 0, g); caixa(.02, 1.3, .52, std(0x5b6064, .6), 0, Y + .75, 0, g);
+  caixa(.22, .2, .52, new G.MeshStandardMaterial({ color: 0xf2c400, emissive: 0x332200 }), -.24, Y + 1.12, 0, g);
+  for (let i = 0; i < 3; i++) caixa(.3, .02, .52, std(0x6b7075, .6), .22, Y + .3 + i * .08, 0, g);
   marca(g, 'controlador'); }
-const [cpx, cpz] = pertoLivre(ctx - pG0.tx * 1.8, ctz - pG0.tz * 1.8, .4);
-const CAIXA_P = new G.Vector3(cpx, 0, cpz);
-marca(caixa(.8, .04, .6, mTampa, cpx, .03, cpz, scene, false), 'energia');
 const CENTRAL = new G.Vector3(ctx - pG0.tx * 45, 0, ctz - pG0.tz * 45);
-const gEnergia = new G.Group(), gAerea = new G.Group(), gSub = new G.Group(), gSemFio = new G.Group(), gIA = new G.Group();
-scene.add(gEnergia, gAerea, gSub, gSemFio, gIA);
+const gSemFio = new G.Group(), gIA = new G.Group();
+scene.add(gSemFio, gIA);
 const PULSOS = [];
-function cabo(pts, cor, raio, pai, id) {
-  const cp = new G.CurvePath(); for (let i = 0; i < pts.length - 1; i++) cp.add(new G.LineCurve3(pts[i], pts[i + 1]));
-  const m = new G.MeshBasicMaterial({ color: cor, toneMapped: false });   // cor viva, sem o ajuste de tons da cena
-  marca(pai.add(new G.Mesh(new G.TubeGeometry(cp, Math.max(8, pts.length * 12), raio, 6, false), m)).children.slice(-1)[0], id);
-  const bm = new G.MeshBasicMaterial({ color: new G.Color(cor).lerp(new G.Color(0xffffff), .6), toneMapped: false }), bg = new G.SphereGeometry(raio * 2.2, 8, 6);
-  const n = Math.max(2, Math.round(cp.getLength() / 5)), bolas = [];
-  for (let i = 0; i < n; i++) { const b = new G.Mesh(bg, bm); pai.add(b); bolas.push(b); }
-  PULSOS.push({ cp, bolas, pai, f: rnd(), vel: 3.5 / cp.getLength() });
-}
 // enlace sem fio: arco fino e transparente pelo ar, com pulsos, sem aparencia de cabo
-const ANT_T = 2.8, ANT_C = 7;
+const ANT_T = 6.8, ANT_C = 7, POSTE_C = new G.Vector3(ctx - pG0.tx * .36, 0, ctz - pG0.tz * .36);   // antena no topo do poste do controlador
 function enlace(a, b, altura, cor) {
   const m = a.clone().lerp(b, .5); m.y = Math.max(a.y, b.y) + altura;
   const cp = new G.CurvePath(); cp.add(new G.QuadraticBezierCurve3(a, m, b));
@@ -6053,19 +6077,12 @@ function enlace(a, b, altura, cor) {
   const bolas = []; for (let i = 0, n = Math.max(3, Math.round(cp.getLength() / 4)); i < n; i++) { const c = new G.Mesh(bg, bm); gSemFio.add(c); bolas.push(c); }
   PULSOS.push({ cp, bolas, pai: gSemFio, f: rnd(), vel: 9 / cp.getLength() });
 }
-{ const ENE = 0xffb21a, RF = 0x3fd0ff, SG = SINAIS.G, SL = SINAIS.L;
-  // energia: caixa de passagem -> controlador -> cada poste, subindo ate os grupos focais
-  cabo([UP(CAIXA_P, YC), UP(CTRL, YC)], ENE, .1, gEnergia, 'energia');
-  for (const [b, h] of [[SG.base, 6.3], [SG.rep, 4.1], [SL.base, 6.3], [SL.rep, 4.1]]) cabo([UP(CTRL, YC), UP(b, YC, .18), UP(b, h, .18)], ENE, .08, gEnergia, 'energia');
-  // entrada da energia: hoje pela fiacao aerea; com IA, por duto subterraneo
-  if (FIO_PTS.length) { const a = FIO_PTS.reduce((m, p) => p.distanceTo(CTRL) < m.distanceTo(CTRL) ? p : m), t = UP(CTRL, 1.6), meio = a.clone().lerp(t, .5); meio.y = Math.min(a.y, t.y) + 1.2;
-    cabo([a, meio, t], ENE, .07, gAerea, 'fiacao'); }
-  cabo([UP(CAIXA_P, YC, -pG0.tx * 40, -pG0.tz * 40), UP(CAIXA_P, YC)], ENE, .1, gSub, 'energia');
+{ const RF = 0x3fd0ff, SG = SINAIS.G, SL = SINAIS.L;
   // dados: rede sem fio de cada camera ate a antena do controlador, e dali ate a central
   const mAnt = std(0x24282c, .5), antena = (x, h, z) => marca(caixa(.07, h, .07, mAnt, x, h / 2, z, gSemFio), 'semFio');
-  antena(ctx, ANT_T, ctz); antena(CENTRAL.x, ANT_C, CENTRAL.z);
-  for (const S of [SG, SL]) enlace(S.cam, UP(CTRL, ANT_T), 1.2, RF);
-  enlace(UP(CTRL, ANT_T), UP(CENTRAL, ANT_C), 6, RF);
+  antena(POSTE_C.x, ANT_T, POSTE_C.z); antena(CENTRAL.x, ANT_C, CENTRAL.z);
+  for (const S of [SG, SL]) enlace(S.cam, UP(POSTE_C, ANT_T), 1.2, RF);
+  enlace(UP(POSTE_C, ANT_T), UP(CENTRAL, ANT_C), 6, RF);
   // area que cada camera ve: piramide transparente ate a fila e o chao destacado
   const mCone = new G.MeshBasicMaterial({ color: 0x35d07f, toneMapped: false, transparent: true, opacity: .16, side: G.DoubleSide, depthWrite: false });
   const mChao = new G.MeshBasicMaterial({ color: 0x35d07f, toneMapped: false, transparent: true, opacity: .3, side: G.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
@@ -6093,14 +6110,25 @@ function carro(corV, taxi, suv) {
   rodas(g, [-1.35, 1.35], suv ? .37 : .33, 1.62);
   [-.6, .6].forEach(z => { caixa(.08, .13, .36, mFarol, 2.22, .68 + H, z, g, false); caixa(.06, .15, .4, mLant, -2.2, .76 + H, z, g, false); });
   if (taxi) { caixa(3.4, .09, 1.84, std(0x1d4f9c, .4), 0, .66 + H, 0, g, false); caixa(.36, .14, .7, new G.MeshStandardMaterial({ color: 0x2bd46a, emissive: 0x2bd46a, emissiveIntensity: .3 }), -.4, 1.58 + H, 0, g, false); }
-  return Object.assign(g, { compr: 4.4 });
+  return Object.assign(g, { compr: 4.4, alt: 1.9, tipo: taxi ? 'Táxi' : 'Carro' });
 }
 function onibus() {
   const g = new G.Group(), p = new G.MeshPhysicalMaterial({ color: 0x1f7a3a, roughness: .4, metalness: .2, clearcoat: .7 });
   curva(c => { c.moveTo(-6, .42); c.lineTo(6, .42); c.lineTo(6.06, 2.9); c.lineTo(5.8, 3.12); c.lineTo(-5.9, 3.12); c.lineTo(-6, 2.95); }, 2.5, p, g);
   caixa(11.6, .5, 2.53, std(0xeeeeea, .5), 0, 3.0, 0, g, false); caixa(11.2, 1.05, 2.54, mVidro, -.15, 2.15, 0, g, false); caixa(.08, 1.3, 2.2, mVidro, 6.03, 2.1, 0, g, false);
   rodas(g, [-3.9, 3.9], .5, 2.2); [-.9, .9].forEach(z => { caixa(.05, .16, .34, mFarol, 6.06, .8, z, g, false); caixa(.05, .2, .3, mLant, -6.02, 1, z, g, false); });
-  return Object.assign(g, { compr: 12 });
+  return Object.assign(g, { compr: 12, alt: 3.4, tipo: 'Ônibus' });
+}
+function caminhao() {   // caminhao bau: cabine na frente (+x) e bau atras
+  const g = new G.Group(), cab = new G.MeshPhysicalMaterial({ color: escolhe([0xc8261e, 0x1d4f9c, 0xe9e9e4]), roughness: .35, metalness: .3, clearcoat: .8 });
+  caixa(7.1, .32, 1.9, std(0x26292c, .7), 0, .72, 0, g, false);                                                       // chassi
+  caixa(1.9, 1.95, 2.3, cab, 2.6, 1.85, 0, g); caixa(.06, .85, 2.02, mVidro, 3.56, 2.3, 0, g, false); caixa(1.0, .62, 2.32, mVidro, 2.85, 2.32, 0, g, false);
+  caixa(.3, .5, 2.2, std(0x1a1c1e, .6), 3.45, 1.15, 0, g, false);                                                     // grade
+  const bau = caixa(5.1, 2.65, 2.45, std(0xf1f1ec, .5), -.95, 2.3, 0, g); bau.castShadow = true;
+  caixa(.04, 2.5, 2.3, std(0xcfd2d4, .5), -3.52, 2.3, 0, g, false);                                                   // portas traseiras
+  rodas(g, [-2.55, -1.45, 2.55], .5, 2.05);
+  [-.85, .85].forEach(z => { caixa(.06, .18, .36, mFarol, 3.62, 1.05, z, g, false); caixa(.06, .2, .3, mLant, -3.55, .95, z, g, false); });
+  return Object.assign(g, { compr: 7.2, alt: 3.7, tipo: 'Caminhão' });
 }
 const CORES = [0xe7e7e4, 0x9aa0a6, 0x131416, 0x7c1414, 0x143a78, 0x3a3d42, 0xc7c9cc, 0xf4f4f2];
 const AMARELO_TAXI = 0xf2c200;
@@ -6113,15 +6141,36 @@ const FROTAS = [
 for (const f of FROTAS) {
   f.carros = []; let s = rnd(20);
   for (let i = 0; i < f.n && s < f.tr.tot - 10; i++) {
-    const r = rnd(), o = f.bus && r < .14 ? onibus() : r < .4 ? carro(AMARELO_TAXI, true) : carro(escolhe(CORES), false, r > .8);
-    scene.add(o); marca(o, o.compr > 5 ? 'onibusV' : (r < .4 ? 'taxi' : 'carros'));
+    const r = rnd(), o = f.k === 'G' && i % 5 === 2 ? caminhao() : f.bus && r < .14 ? onibus() : r < .4 ? carro(AMARELO_TAXI, true) : carro(escolhe(CORES), false, r > .8);
+    scene.add(o); marca(o, o.tipo === 'Caminhão' ? 'carros' : o.compr > 5 ? 'onibusV' : (r < .4 ? 'taxi' : 'carros'));
     f.carros.push({ o, s, v: 0, vmax: rnd(...f.v), L: o.compr, fx: Math.floor(rnd(f.faixas)) });
     s += f.tr.tot / f.n * rnd(.7, 1.1);
   }
 }
 // caixa verde que aparece em volta do carro quando a camera com IA o conta
 const mCaixaIA = new G.LineBasicMaterial({ color: 0x5dff9d });
-for (const f of FROTAS) if (f.k) for (const c of f.carros) { const b = new G.LineSegments(new G.EdgesGeometry(new G.BoxGeometry(c.L + .4, 1.9, 2.2)), mCaixaIA); b.position.y = .95; b.visible = false; c.o.add(b); c.caixaIA = b; }
+const texTipo = {}, etiqueta = t => texTipo[t] || (texTipo[t] = telaTex(256, 64, (x, w, h) => { x.fillStyle = 'rgba(10,30,18,.85)'; x.fillRect(0, 0, w, h); x.strokeStyle = '#5dff9d'; x.lineWidth = 6; x.strokeRect(3, 3, w - 6, h - 6); x.fillStyle = '#5dff9d'; x.textAlign = 'center'; x.font = '700 38px Barlow, Arial'; x.fillText(t, w / 2, 45); }));
+for (const f of FROTAS) if (f.k) for (const c of f.carros) { const alt = c.o.alt || 1.9, larg = c.o.tipo === 'Caminhão' ? 2.6 : 2.2;
+  const b = new G.LineSegments(new G.EdgesGeometry(new G.BoxGeometry(c.L + .4, alt, larg)), mCaixaIA); b.position.y = alt / 2; b.visible = false; c.o.add(b); c.caixaIA = b;
+  const et = new G.Sprite(new G.SpriteMaterial({ map: etiqueta(c.o.tipo || 'Carro'), depthTest: false, toneMapped: false })); et.scale.set(1.9, .48, 1); et.position.y = alt / 2 + .45; et.renderOrder = 5; b.add(et); }   // a IA mostra o tipo do veiculo que reconheceu
+
+// sensores no chao (lacos) antes da linha de retencao de cada semaforo, um por faixa: quadrado marcado na cor do sinal; fica mais forte com carro em cima
+const gSel = new G.Group(); scene.add(gSel);
+const SENSORES = [];
+for (const k of ['G', 'L']) { const a = AP[k], n = FROTAS.find(x => x.k === k).faixas, sL = a.sPare - 2.6, p = em(a.tr, sL), rot = Math.atan2(p.tx, p.tz);
+  for (let fx = 0; fx < n; fx++) {
+    const off = (fx + .5) / n * a.w - a.w / 2, g = grupo(p.x - p.tz * off, p.z + p.tx * off, rot, gSel); g.position.y = .04;
+    const lado = Math.min(1.9, a.w / n - .7), mBorda = new G.MeshBasicMaterial({ color: LUZ.R, toneMapped: false });
+    for (const [w, d, x, z] of [[lado, .12, 0, lado / 2], [lado, .12, 0, -lado / 2], [.12, lado + .12, lado / 2, 0], [.12, lado + .12, -lado / 2, 0]]) caixa(w, .012, d, mBorda, x, 0, z, g, false);
+    const mFundo = new G.MeshBasicMaterial({ color: LUZ.R, transparent: true, opacity: .15, depthWrite: false, toneMapped: false });
+    const fundo = new G.Mesh(new G.PlaneGeometry(lado, lado), mFundo); fundo.rotation.x = -PI / 2; fundo.position.y = .004; g.add(fundo);
+    marca(g, 'sensores'); SENSORES.push({ k, fx, s: sL, lado, mBorda, mFundo });
+  }
+}
+function atualizaSensores(fs) {
+  for (const S of SENSORES) { const f = FROTAS.find(x => x.k === S.k), cor = LUZ[fs[S.k]], ativo = f.carros.some(c => c.fx === S.fx && Math.abs(c.s - S.s) < c.L / 2 + S.lado / 2);
+    S.mBorda.color.setHex(cor); S.mFundo.color.setHex(cor); S.mFundo.opacity = ativo ? .45 : .15; }
+}
 
 /* ================= ciclo semaforico ================= */
 const CICLO = 34;
@@ -6183,7 +6232,7 @@ function moveVeiculos(dt) {
     }
     for (const c of fr.carros) {
       c.s += c.v * dt; if (c.s > tot) c.s -= tot;
-      const p = em(fr.tr, c.s), q = em(fr.tr, c.s + 2.5), off = (c.fx + .5) / fr.faixas * fr.w - fr.w / 2;
+      const p = em(fr.tr, c.s), q = em(fr.tr, c.s + 2.5), wl = largEm(fr.tr, c.s, fr.w), lim = Math.max(0, wl / 2 - (c.o.tipo === 'Caminhão' ? 1.35 : 1.1)), off = Math.max(-lim, Math.min(lim, (c.fx + .5) / fr.faixas * wl - wl / 2));   // faixa dentro da largura real da rua, sem sair da pista
       const x = p.x - p.tz * off, z = p.z + p.tx * off;
       c.o.position.set(x, .02, z); c.o.rotation.y = Math.atan2(-(q.z - p.z), q.x - p.x);
       c.o.visible = Math.hypot(x, z) < 340;
@@ -6193,7 +6242,7 @@ function moveVeiculos(dt) {
 
 /* ================= pessoas (MakeHuman) com caminhada propria ================= */
 const PESSOAS = [], OBST = [];
-const SEM_OBST = new Set(['pista', 'faixa', 'calcada', 'ciclovia', 'predio', 'predios', 'torre', 'riosul', 'muro', 'taxi', 'carros', 'onibusV', 'estacionados', 'pedestres', 'arvores', 'arvnovas', 'ciclofaixa', 'tatil', 'bueiro']);
+const SEM_OBST = new Set(['sensores', 'pista', 'faixa', 'calcada', 'ciclovia', 'predio', 'predios', 'torre', 'riosul', 'muro', 'taxi', 'carros', 'onibusV', 'estacionados', 'pedestres', 'arvores', 'arvnovas', 'ciclofaixa', 'tatil', 'bueiro']);
 function montaObstaculos() {
   scene.updateMatrixWorld(true); const bb = new G.Box3();
   scene.traverse(m => {
@@ -6262,8 +6311,11 @@ function movePessoas(dt) {
     else { const dx = dest[0] - p.x, dz = dest[1] - p.z, d = Math.hypot(dx, dz);
       if (d < .15) p.idx = (p.idx + 1) % p.rota.length;
       else { const v = p.vel * dt; p.x += dx / d * v; p.z += dz / d * v; quer = 1; let a = Math.atan2(dx, dz) - p.ang; a = Math.atan2(Math.sin(a), Math.cos(a)); p.ang += a * Math.min(1, dt * 8); } }
-    p.anda += (quer - p.anda) * Math.min(1, dt * 7); p.w.setEffectiveWeight(p.anda); p.p.setEffectiveWeight(1 - p.anda); p.w.timeScale = p.vel / 1.4;
     [p.x, p.z] = solta(p.x, p.z);
+    // se um obstaculo o empurra de volta, ele nao fica andando no lugar: a animacao segue o quanto andou de verdade e, travado por ~1 s, segue para o proximo ponto
+    if (quer && dt > 0) { const ant = p.ult || [p.x, p.z], andou = Math.hypot(p.x - ant[0], p.z - ant[1]) / (p.vel * dt); if (andou < .3) { p.trava = (p.trava || 0) + dt; quer = 0; if (p.trava > 1) { p.idx = (p.idx + 1) % p.rota.length; p.trava = 0; } } else p.trava = 0; }
+    p.ult = [p.x, p.z];
+    p.anda += (quer - p.anda) * Math.min(1, dt * 7); p.w.setEffectiveWeight(p.anda); p.p.setEffectiveWeight(1 - p.anda); p.w.timeScale = p.vel / 1.4;
     p.o.position.set(p.x, .02, p.z); p.o.rotation.y = p.ang; p.mx.update(dt);
   }
 }
@@ -6277,29 +6329,25 @@ const ELEMENTOS = [
     d: 'Controla quem vem da Rua General Góis Monteiro para a Lauro Sodré. Sem IA, abre e fecha sempre no mesmo tempo, haja carro esperando ou não. Com IA, o tempo de verde muda conforme a fila que a câmera vê.', r: '<b>Regra:</b> avançar o sinal vermelho é infração gravíssima (CTB, art. 208).' },
   { id: 'semL', cat: 'sinal', t: 'Semáforo da pista local', p: () => SINAIS.L.pos, v: [9, 2.5],
     d: 'Controla a pista local da Lauro Sodré. Alterna com o semáforo da Góis Monteiro: os dois nunca ficam verdes ao mesmo tempo.', r: '' },
-  { id: 'pedestres', cat: 'pedestres', t: 'Semáforo de pedestres e botoeira', p: () => SINAIS.G.ped, v: [6, 1],
-    d: 'O boneco verde libera a travessia. A botoeira amarela no poste é o botão que o pedestre aperta para pedir a vez; a versão sonora avisa quem tem baixa visão.', r: 'Com IA, o controlador segura o verde dos carros até quem já começou a atravessar chegar ao outro lado.' },
   { id: 'faixa', cat: 'pedestres', t: 'Faixa e linha de retenção', p: () => at(RG, AP.G.sFaixa, 0, .1), v: [12, 7],
     d: 'A faixa zebrada marca a travessia, e a linha branca antes dela é onde o carro deve parar no vermelho.', r: '<b>Regra:</b> parar sobre a faixa na mudança de sinal é infração (CTB, art. 183).' },
   { id: 'camComum', cat: 'ia', ia: false, t: 'Câmera comum (hoje)', p: () => new G.Vector3(cmx, 6.7, cmz), v: [9, -2], acao: ['Ver com IA', true],
     d: 'Câmera de monitoramento que só grava imagens para a central. Ela não conversa com o semáforo: o sinal abre e fecha no mesmo tempo, com fila ou sem fila.', r: '' },
   { id: 'cameraIA', cat: 'ia', ia: true, t: 'Câmeras com IA', p: () => SINAIS.G.cam, v: [8, 1.5], acao: ['Ver sem IA', false],
-    d: 'Uma câmera no alto de cada semáforo, virada para os carros que chegam. A IA conta os veículos dentro da área verde (cada carro contado ganha uma caixa verde) e manda o número ao controlador pela rede sem fio, várias vezes por segundo.', r: 'Exemplo: 6 carros na Góis Monteiro e 4 na pista local → o verde vai para a Góis Monteiro.' },
+    d: 'Uma câmera no alto de cada semáforo, virada para os carros que chegam. A IA conta os veículos dentro da área verde e reconhece o tipo de cada um: cada veículo contado ganha uma caixa verde com o nome (carro, táxi, caminhão) e manda o número ao controlador pela rede sem fio, várias vezes por segundo.', r: 'Exemplo: 6 carros na Góis Monteiro e 4 na pista local → o verde vai para a Góis Monteiro.' },
+  { id: 'sensores', cat: 'ia', ia: true, t: 'Sensores no chão', p: () => at(RG, AP.G.sPare - 2.6, 0, .1), v: [7, 5],
+    d: 'Quadrados marcados no asfalto logo antes da linha de retenção, na cor do sinal: três na Góis Monteiro, um em cada faixa, e um na pista local. Quando um carro para em cima, o quadrado fica mais forte e avisa o controlador que tem alguém esperando, e o semáforo abre para ele.', r: 'Os sensores e a câmera trabalham juntos: o sensor sente o carro parado na linha e a câmera conta a fila atrás dele.' },
   { id: 'decisao', cat: 'ia', ia: true, t: 'Como a IA decide', p: () => at(RG, AP.G.sPare - 22, 0, 2), v: [18, 8],
     d: 'O verde continua enquanto ainda chegam carros. Troca quando a via esvazia e a outra tem fila, quando a outra fila fica bem maior ou depois de 25 segundos. Nunca corta a travessia de um pedestre no meio.', r: 'Compare a espera média no painel de baixo, com e sem IA.' },
-  { id: 'controlador', cat: 'rede', t: 'Controlador semafórico', p: () => CTRL.clone().setY(1.6), v: [6, 2],
-    d: 'Armário de metal ao lado do poste. Recebe a energia e comanda as luzes de todos os semáforos do cruzamento. Com IA, também recebe a contagem das câmeras e decide quem fica com o verde.', r: '' },
-  { id: 'energia', cat: 'rede', t: 'Cabo de energia', p: () => CAIXA_P.clone().setY(.4), v: [7, 3],
-    d: 'Em amarelo, a energia chega à caixa de passagem na calçada, entra no controlador e segue por dutos sob a calçada até cada poste, subindo por dentro dele até as luzes.', r: 'Sem IA, a energia ainda desce da fiação aérea. Com IA, a entrada também passa pelo subsolo.' },
-  { id: 'fiacao', cat: 'rede', ia: false, t: 'Fiação aérea (hoje)', p: () => FIO_PTS.length ? FIO_PTS[FIO_PTS.length - 1].clone() : CTRL.clone().setY(8), v: [12, -3],
-    d: 'Postes de concreto com cabos de energia, telefone e internet pendurados. Um ramal desce até o controlador do semáforo.', r: '' },
+  { id: 'controlador', cat: 'rede', t: 'Controlador semafórico', p: () => CTRL.clone().setY(CTRL_Y + 1.6), v: [6, 2],
+    d: 'Armário de metal preso no alto de um poste, fora do alcance de batidas e alagamentos. Recebe a energia e comanda as luzes de todos os semáforos do cruzamento. Com IA, também recebe a contagem das câmeras e decide quem fica com o verde.', r: '' },
   { id: 'semFio', cat: 'rede', ia: true, t: 'Rede sem fio na borda', p: () => SINAIS.L.cam, v: [8, 1],
     d: 'Em azul, o enlace sem fio entre cada câmera e o controlador, sem cabo de dados. A IA opera na borda: a imagem é analisada ali no poste e a contagem segue pela rede até o controlador.', r: '' },
   { id: 'central', cat: 'rede', ia: true, t: 'Para a central de operações', p: () => CENTRAL.clone().setY(ANT_C), v: [14, 6],
     d: 'Pela rede sem fio, o controlador manda os dados para a central da cidade, que acompanha todos os cruzamentos, recebe alertas de acidente ou de semáforo com defeito e pode ajustar os tempos a distância.', r: '' }
 ];
 // aliases de clique em objetos
-const ALIAS = { semG: 'semG', semL: 'semL', faixa: 'faixa', camComum: 'camComum', cameraIA: 'cameraIA', controlador: 'controlador', energia: 'energia', semFio: 'semFio', fiacao: 'fiacao' };
+const ALIAS = { semG: 'semG', semL: 'semL', faixa: 'faixa', camComum: 'camComum', cameraIA: 'cameraIA', controlador: 'controlador', semFio: 'semFio', sensores: 'sensores' };
 
 /* ================= interface ================= */
 const porId = {};
@@ -6311,7 +6359,8 @@ ELEMENTOS.forEach((e, i) => {
 });
 const catChk = {};
 Object.entries(CATS).forEach(([k, [n, c]]) => { const l = document.createElement('label'); l.innerHTML = `<input type="checkbox" id="c-${k}"><span class="ponto" style="--cor:${c}"></span>${n}`; catChk[k] = l.firstChild; l.firstChild.onchange = ev => marcaLegenda(ELEMENTOS.filter(e => e.cat === k), ev.target.checked); $('cats').append(l); });
-function marcaLegenda(lista, v) { lista.forEach(e => { e.marcado = v; e.chk.checked = v; }); for (const k in CATS) { const g = ELEMENTOS.filter(e => e.cat === k), n = g.filter(e => e.marcado).length; catChk[k].checked = n === g.length; catChk[k].indeterminate = n > 0 && n < g.length; } }
+function visCamIA() { const v = modoIA; gIA.visible = v; camsIA.forEach(c => { c.visible = v; }); }   // cameras com IA: aparecem sempre no modo Cidade inteligente; o check da lista so esconde o nome
+function marcaLegenda(lista, v) { lista.forEach(e => { e.marcado = v; e.chk.checked = v; }); visCamIA(); for (const k in CATS) { const g = ELEMENTOS.filter(e => e.cat === k), n = g.filter(e => e.marcado).length; catChk[k].checked = n === g.length; catChk[k].indeterminate = n > 0 && n < g.length; } }
 marcaLegenda(ELEMENTOS.filter(e => e.marcado), true);
 $('marcaTudo').onclick = () => marcaLegenda(ELEMENTOS, true);
 $('limpa').onclick = () => marcaLegenda(ELEMENTOS, false);
@@ -6329,7 +6378,7 @@ let voo = null, atual = null;
 function voa(c, a) { if (movido) { camera.position.copy(c); controls.target.copy(a); return; } voo = { t: 0, c0: camera.position.clone(), a0: controls.target.clone(), c1: c, a1: a }; }
 function fichaInicial() {
   $('ficha').style.removeProperty('--cor');
-  $('ficha').innerHTML = `<div class="cat">Botafogo · Rio de Janeiro</div><h2>Semáforo com e sem IA</h2><p>A esquina da Rua General Góis Monteiro com a Av. Lauro Sodré, com foco no que faz o semáforo funcionar: câmera, controlador, cabos de energia e rede sem fio.</p><p class="regra"><b>Sem IA</b>, o sinal abre e fecha em tempo fixo. <b>Com IA</b>, câmeras contam os carros e o verde vai para a via com mais fila. Troque o modo no painel de baixo e compare a espera média.</p><p class="fonte">Ruas e prédios: © colaboradores do OpenStreetMap (ODbL). Relevo: Terrain Tiles (Mapzen/AWS). Satélite: Sentinel-2 cloudless por EOX (CC BY 4.0). Pessoas: MakeHuman (CC0). Árvore e texturas: Poly Haven (CC0). Câmeras, cabos, rede sem fio e controlador são representações ilustrativas.</p><div id="passos"><button class="acao" id="btInicio">Começar pelo primeiro</button><button class="acao" id="btIA">${modoIA ? 'Desligar a IA' : 'Ligar a IA'}</button></div>`;
+  $('ficha').innerHTML = `<div class="cat">Botafogo · Rio de Janeiro</div><h2>Semáforo com e sem IA</h2><p>A esquina da Rua General Góis Monteiro com a Av. Lauro Sodré, com foco no que faz o semáforo funcionar: câmera, controlador e rede sem fio.</p><p class="regra"><b>Sem IA</b>, o sinal abre e fecha em tempo fixo. <b>Com IA</b>, câmeras contam os carros e o verde vai para a via com mais fila. Troque o modo no painel de baixo e compare a espera média.</p><p class="fonte">Ruas e prédios: © colaboradores do OpenStreetMap (ODbL). Relevo: Terrain Tiles (Mapzen/AWS). Satélite: Sentinel-2 cloudless por EOX (CC BY 4.0). Pessoas: MakeHuman (CC0). Árvore e texturas: Poly Haven (CC0). Câmeras, cabos, rede sem fio e controlador são representações ilustrativas.</p><div id="passos"><button class="acao" id="btInicio">Começar pelo primeiro</button><button class="acao" id="btIA">${modoIA ? 'Desligar a IA' : 'Ligar a IA'}</button></div>`;
   $('btIA').onclick = () => { defineModo(!modoIA); fichaInicial(); };
   $('btInicio').onclick = () => seleciona(ELEMENTOS[0].id);
 }
@@ -6350,7 +6399,7 @@ function seleciona(id) {
 }
 function defineModo(v) {
   modoIA = v; $('mSem').setAttribute('aria-pressed', !v); $('mCom').setAttribute('aria-pressed', v);
-  gIA.visible = gSemFio.visible = gSub.visible = v; gAerea.visible = gFios.visible = gCamComum.visible = !v; camsIA.forEach(c => { c.visible = v; });
+  gSemFio.visible = gSel.visible = v; gFios.visible = gCamComum.visible = !v; visCamIA(); placasIA.forEach(c => { c.visible = v; });
   $('barra').hidden = v; $('contagem').classList.toggle('ia', v); ultimaFase = null; ultimaCont = '';
   if (v) { const f = fase(relogio); Object.assign(ctl, { verde: f.L === 'G' ? 'L' : 'G', etapa: 'V', t: 0, pedAte: 0, motivo: '' }); }
 }
@@ -6421,6 +6470,7 @@ function quadro() {
   atualizaRede(dt);
   const f = faseAtual(), cic = relogio % CICLO;
   for (const k of ['G', 'L']) for (const c of ['R', 'Y', 'G']) lamp[k][c].emissiveIntensity = f[k] === c ? 4 : 0;
+  atualizaSensores(f);
   for (const [k, ini, fim] of [['G', 17, 30], ['L', 0, 13]]) { const anda = f['p' + k] === 1, fimJa = !modoIA && fim - cic <= 3 && cic >= ini, pisca = Math.floor(cic * 2) % 2 === 0; ped[k].W.emissiveIntensity = anda && !fimJa ? 3 : 0; ped[k].S.emissiveIntensity = !anda || (fimJa && pisca) ? 3 : 0; }
   const rot = f.t + '|' + f.s;
   if (rot !== ultimaFase) { ultimaFase = rot; $('faseTxt').firstChild.textContent = f.t; $('faseTxt').lastChild.textContent = f.s; }
@@ -6432,7 +6482,7 @@ function quadro() {
   renderer.render(scene, camera);
   const w = canvas.clientWidth, h = canvas.clientHeight;
   for (const e of ELEMENTOS) {
-    const vis = !intro && (e.marcado || e === atual) && (e.ia === undefined || e.ia === modoIA);
+    const vis = !intro && e.marcado && (e.ia === undefined || e.ia === modoIA);
     if (!vis) { e.pino.hidden = true; continue; }
     tmp.copy(e._p || (e._p = e.p())).project(camera); const ok = tmp.z < 1 && Math.abs(tmp.x) < 1 && Math.abs(tmp.y) < 1;
     e.pino.hidden = !ok; if (ok) { e.pino.style.transform = `translate(${Math.round((tmp.x + 1) / 2 * w)}px,${Math.round((1 - tmp.y) / 2 * h)}px)`; e.pino.classList.toggle('nomeado', e.marcado); }
