@@ -6032,8 +6032,6 @@ const gFios = new G.Group(), FIO_PTS = []; scene.add(gFios);
     for (let t = 0; t <= 1.001; t += .1) curva.push(new G.Vector3(a.x + (b.x - a.x) * t + off * .3, a.y - .2 * k - Math.sin(t * PI) * (.7 + k * .12), a.z + (b.z - a.z) * t + off));
     gFios.add(new G.Line(new G.BufferGeometry().setFromPoints(curva), mCabo));
   }
-  // fios que cruzam a rua ate o outro lado
-  if (pts.length) { const a = pts[pts.length - 1], p = em(RG, sOG - 4), b = new G.Vector3(p.x - p.tz * -(AP.G.w / 2 + 1), 8.6, p.z + p.tx * -(AP.G.w / 2 + 1)); for (let k = 0; k < 4; k++) { const c = []; for (let t = 0; t <= 1.001; t += .1) c.push(new G.Vector3(a.x + (b.x - a.x) * t, a.y - k * .25 - Math.sin(t * PI) * .9, a.z + (b.z - a.z) * t)); gFios.add(new G.Line(new G.BufferGeometry().setFromPoints(c), mCabo)); } }
   gFios.children.forEach(o => { if (o.isMesh) { o.userData.id = 'fiacao'; clicaveis.push(o); } });
 }
 
@@ -6068,6 +6066,10 @@ scene.add(gSemFio, gIA);
 const PULSOS = [];
 // enlace sem fio: arco fino e transparente pelo ar, com pulsos, sem aparencia de cabo
 const ANT_T = 6.8, ANT_C = 7, POSTE_C = new G.Vector3(ctx - pG0.tx * .36, 0, ctz - pG0.tz * .36);   // antena no topo do poste do controlador
+// fios de energia que cruzam a rua: saem do ultimo poste de concreto e chegam no topo do poste do controlador (aparecem com a fiacao aerea)
+if (FIO_PTS.length) { const a = FIO_PTS[FIO_PTS.length - 1], b = new G.Vector3(POSTE_C.x, 5.85, POSTE_C.z), mCabo = new G.LineBasicMaterial({ color: 0x0b0b0b });
+  caixa(.7, .08, .08, mPoste, POSTE_C.x, 5.85, POSTE_C.z, gFios).rotation.y = Math.atan2(b.x - a.x, b.z - a.z) + PI / 2;   // cruzeta no topo do poste
+  for (let k = 0; k < 4; k++) { const off = (k - 1.5) * .16, c = []; for (let t = 0; t <= 1.001; t += .05) c.push(new G.Vector3(a.x + (b.x - a.x) * t, a.y - k * .25 + (b.y - a.y + k * .25) * t - Math.sin(t * PI) * .8, a.z + (b.z - a.z) * t + off * t)); gFios.add(new G.Line(new G.BufferGeometry().setFromPoints(c), mCabo)); } }
 function enlace(a, b, altura, cor) {
   const m = a.clone().lerp(b, .5); m.y = Math.max(a.y, b.y) + altura;
   const cp = new G.CurvePath(); cp.add(new G.QuadraticBezierCurve3(a, m, b));
